@@ -29,6 +29,7 @@ export default function TodoApp() {
     setTodos(data);
   };
 
+  // Updated handleAddTodo function
   const handleAddTodo = async () => {
     if (newTodo.trim() === "") return;
     await fetch("http://127.0.0.1:8000/posttodo", {
@@ -39,6 +40,13 @@ export default function TodoApp() {
     setNewTodo("");
     setShowInput(false);
     fetchTodos();
+  };
+
+  // Add this new function to handle Enter key press
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      handleAddTodo();
+    }
   };
 
   const toggleComplete = async (id: number, completed: boolean) => {
@@ -89,11 +97,18 @@ export default function TodoApp() {
     if (editText.trim() === "") return;
 
     try {
-      const response = await fetch(`http://127.0.0.1:8000/todos/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: editText }),
-      });
+      // Get the current todo to preserve its completed status
+      const currentTodo = todos.find((todo) => todo.id === id);
+      if (!currentTodo) return;
+
+      const response = await fetch(
+        `http://127.0.0.1:8000/todos/${id}?title=${encodeURIComponent(
+          editText
+        )}&completed=${currentTodo.completed}`,
+        {
+          method: "PATCH",
+        }
+      );
 
       if (!response.ok) {
         throw new Error("Failed to update todo");
@@ -158,8 +173,10 @@ export default function TodoApp() {
             type="text"
             value={newTodo}
             onChange={(e) => setNewTodo(e.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder="Enter todo..."
             className="w-full px-4 py-2 text-black border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            autoFocus
           />
           <button
             onClick={handleAddTodo}
