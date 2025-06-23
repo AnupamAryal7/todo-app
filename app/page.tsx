@@ -12,9 +12,11 @@ interface Todo {
 
 export default function TodoApp() {
   const [todos, setTodos] = useState<Todo[]>([]);
-
   const [showInput, setShowInput] = useState(false);
   const [newTodo, setNewTodo] = useState("");
+  const [isAddingTodo, setIsAddingTodo] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [deletingTodoId, setDeletingTodoId] = useState<number | null>(null);
 
   useEffect(() => {
     fetchTodos();
@@ -31,15 +33,24 @@ export default function TodoApp() {
 
   // Updated handleAddTodo function
   const handleAddTodo = async () => {
-    if (newTodo.trim() === "") return;
-    await fetch("http://127.0.0.1:8000/posttodo", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: newTodo }),
-    });
-    setNewTodo("");
-    setShowInput(false);
-    fetchTodos();
+    if (newTodo.trim() === "" || isAddingTodo) return;
+
+    setIsAddingTodo(true);
+    try {
+      await fetch("http://127.0.0.1:8000/posttodo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: newTodo }),
+      });
+      setNewTodo("");
+      setShowInput(false);
+      await fetchTodos();
+    } catch (error) {
+      console.error("Failed to add todo:", error);
+      alert("Could not add todo. Please try again.");
+    } finally {
+      setIsAddingTodo(false);
+    }
   };
 
   // Add this new function to handle Enter key press
@@ -92,12 +103,12 @@ export default function TodoApp() {
     }
   };
 
-  // Add this function to save the edited todo
+  // Updated handleSaveEdit with loading state
   const handleSaveEdit = async (id: number) => {
-    if (editText.trim() === "") return;
+    if (editText.trim() === "" || isSavingEdit) return;
 
+    setIsSavingEdit(true);
     try {
-      // Get the current todo to preserve its completed status
       const currentTodo = todos.find((todo) => todo.id === id);
       if (!currentTodo) return;
 
@@ -114,7 +125,6 @@ export default function TodoApp() {
         throw new Error("Failed to update todo");
       }
 
-      // Update local state
       setTodos((prevTodos) =>
         prevTodos.map((todo) =>
           todo.id === id ? { ...todo, title: editText } : todo
@@ -126,6 +136,8 @@ export default function TodoApp() {
     } catch (error) {
       console.error("Edit failed:", error);
       alert("Could not update todo. Please try again.");
+    } finally {
+      setIsSavingEdit(false);
     }
   };
 
@@ -134,7 +146,11 @@ export default function TodoApp() {
     setEditText("");
   };
 
+  // Updated handleDelete with loading state
   const handleDelete = async (id: number) => {
+    if (deletingTodoId === id) return; // Prevent double clicks
+
+    setDeletingTodoId(id);
     try {
       const response = await fetch(`http://127.0.0.1:8000/todos/${id}`, {
         method: "DELETE",
@@ -144,11 +160,12 @@ export default function TodoApp() {
         throw new Error("Failed to delete todo");
       }
 
-      // Optimistically update the local todos list
       setTodos((prevTodos) => prevTodos.filter((todo) => todo.id !== id));
     } catch (error) {
       console.error(error);
       alert("Could not delete todo. Please try again.");
+    } finally {
+      setDeletingTodoId(null);
     }
   };
 
@@ -177,12 +194,25 @@ export default function TodoApp() {
             placeholder="Enter todo..."
             className="w-full px-4 py-2 text-black border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             autoFocus
+            disabled={isAddingTodo}
           />
           <button
             onClick={handleAddTodo}
-            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+            disabled={isAddingTodo}
+            className={`px-4 py-2 rounded transition ${
+              isAddingTodo
+                ? "bg-gray-400 text-gray-600 cursor-not-allowed"
+                : "bg-green-600 text-white hover:bg-green-700"
+            }`}
           >
-            Add
+            {isAddingTodo ? (
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                Adding...
+              </div>
+            ) : (
+              "Add"
+            )}
           </button>
         </div>
       )}
@@ -200,7 +230,7 @@ export default function TodoApp() {
                 onChange={() => toggleComplete(todo.id, todo.completed)}
                 className="h-5 w-5 accent-blue-600 cursor-pointer"
               />
-
+              {/*  Updated JSX for Edit section with loading animation */}
               {editingId === todo.id ? (
                 <div className="flex gap-2 flex-1">
                   <input
@@ -209,16 +239,30 @@ export default function TodoApp() {
                     onChange={(e) => setEditText(e.target.value)}
                     className="flex-1 px-2 py-1 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                     autoFocus
+                    disabled={isSavingEdit}
                   />
                   <button
                     onClick={() => handleSaveEdit(todo.id)}
-                    className="bg-green-600 text-white px-2 py-1 rounded text-sm hover:bg-green-700"
+                    disabled={isSavingEdit}
+                    className={`px-2 py-1 rounded text-sm transition ${
+                      isSavingEdit
+                        ? "bg-gray-400 text-gray-600 cursor-not-allowed"
+                        : "bg-green-600 text-white hover:bg-green-700"
+                    }`}
                   >
-                    Save
+                    {isSavingEdit ? (
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Saving...
+                      </div>
+                    ) : (
+                      "Save"
+                    )}
                   </button>
                   <button
                     onClick={handleCancelEdit}
-                    className="bg-gray-600 text-white px-2 py-1 rounded text-sm hover:bg-gray-700"
+                    disabled={isSavingEdit}
+                    className="bg-gray-600 text-white px-2 py-1 rounded text-sm hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
                     Cancel
                   </button>
@@ -238,7 +282,6 @@ export default function TodoApp() {
               <span className="text-sm text-gray-400 mr-4">
                 {new Date(todo.created_at).toLocaleString()}
               </span>
-
               {/* Edit Icon */}
               <button
                 onClick={() => handleEdit(todo.id)}
@@ -247,14 +290,22 @@ export default function TodoApp() {
               >
                 <FaEdit size={18} />
               </button>
-
               {/* Delete Icon */}
               <button
                 onClick={() => handleDelete(todo.id)}
-                className="text-red-600 hover:text-red-800"
+                disabled={deletingTodoId === todo.id}
+                className={`transition ${
+                  deletingTodoId === todo.id
+                    ? "text-gray-400 cursor-not-allowed"
+                    : "text-red-600 hover:text-red-800"
+                }`}
                 aria-label="Delete todo"
               >
-                <FaTrash size={18} />
+                {deletingTodoId === todo.id ? (
+                  <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <FaTrash size={18} />
+                )}
               </button>
             </div>
           </li>
